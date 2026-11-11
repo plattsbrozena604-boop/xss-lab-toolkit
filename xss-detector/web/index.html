@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>XSS EMBER · 反射型注入检测台</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='88'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/assets/style.css" />
+</head>
+<body>
+  <canvas id="embers" aria-hidden="true"></canvas>
+  <div class="heat" aria-hidden="true"><span></span><span></span><span></span></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M16 3c3.2 4.6 1.4 6.6 3.1 9 1.2 1.7 3.4 2.3 3.4 5.6 0 4.4-3.4 7.4-6.5 7.4S9.5 22 9.5 17.6c0-3.1 2.2-4.4 2.2-7.1 0-2.1-1.1-3.3-1.1-3.3" />
+          <path d="M16 26c-2 0-3.4-1.6-3.4-3.4 0-2.3 2.4-3.1 2.4-5.4 1.8 1.4 4.4 2.6 4.4 5.4 0 1.8-1.4 3.4-3.4 3.4Z" fill="currentColor" stroke="none" opacity=".75" />
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1 class="brand-name glitch" data-text="XSS EMBER">XSS EMBER</h1>
+        <p class="brand-sub">REFLECTED XSS CONSOLE · ALERT(1) CANARY</p>
+      </div>
+    </div>
+
+    <div class="topbar-meta">
+      <div class="chip chip--target" id="targetChip" title="当前目标">未配置目标</div>
+      <div class="chip"><span class="dot" id="authDot"></span><span id="authText">Cookie 未载入</span></div>
+      <div class="pill" id="statusPill" data-state="idle"><i></i><span>待机</span></div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- 01 配置 -->
+    <section class="panel panel--config">
+      <h2 class="panel-title"><span class="idx">01</span>目标配置</h2>
+
+      <label class="field">
+        <span class="field-label">目标 URL</span>
+        <textarea id="urlInput" rows="2" spellcheck="false"
+          placeholder="http://127.0.0.1/vulnerabilities/xss_r/?name=test"></textarea>
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">注入参数</span>
+          <input id="paramInput" type="text" spellcheck="false" placeholder="自动识别" list="paramList" />
+          <datalist id="paramList"></datalist>
+        </label>
+        <label class="field field--narrow">
+          <span class="field-label">超时 s</span>
+          <input id="timeoutInput" type="number" min="1" max="60" step="1" value="10" />
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="field-label">
+          Cookie
+          <button type="button" class="mini-btn" id="revealCookie">显示</button>
+        </span>
+        <textarea id="cookieInput" rows="3" spellcheck="false" class="mono masked"
+          placeholder="PHPSESSID=...; security=low"></textarea>
+      </label>
+
+      <label class="switch">
+        <input type="checkbox" id="fullToggle" />
+        <span class="switch-track"><i></i></span>
+        <span class="switch-text">强制跑完整绕过矩阵（<b id="matrixCount">30</b> 条）</span>
+      </label>
+
+      <div class="actions">
+        <button class="btn btn--primary" id="scanBtn">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round">
+            <path d="M12 2.5c2.6 3.8 1.1 5.4 2.5 7.4 1 1.4 2.8 1.9 2.8 4.6 0 3.6-2.8 6-5.3 6s-5.3-2.4-5.3-6c0-2.5 1.8-3.6 1.8-5.8 0-1.7-.9-2.7-.9-2.7" />
+          </svg>
+          开始扫描
+        </button>
+      </div>
+      <button class="btn btn--link" id="clearBtn">清空结果与日志</button>
+
+      <dl class="hud">
+        <div><dt>反射</dt><dd id="statReflect">0</dd></div>
+        <div><dt>可执行</dt><dd id="statExec">0</dd></div>
+        <div><dt>变体</dt><dd id="statVariants">0</dd></div>
+        <div><dt>耗时</dt><dd id="statElapsed">0s</dd></div>
+      </dl>
+    </section>
+
+    <!-- 02/03 流水线 + 控制台 -->
+    <section class="column">
+      <div class="panel panel--stages">
+        <h2 class="panel-title"><span class="idx">02</span>探测流水线</h2>
+        <ol class="stages" id="stages"></ol>
+        <div class="progress"><div class="progress-bar" id="progressBar"></div></div>
+      </div>
+
+      <div class="panel panel--console">
+        <h2 class="panel-title">
+          <span class="idx">03</span>实时控制台
+          <button class="mini-btn" id="clearConsole">清屏</button>
+        </h2>
+        <div class="console" id="console"></div>
+      </div>
+    </section>
+
+    <!-- 04 结果 -->
+    <section class="panel panel--results">
+      <h2 class="panel-title"><span class="idx">04</span>检测结果</h2>
+
+      <div class="verdict" id="verdict" data-state="idle">
+        <span class="verdict-mark" id="verdictMark">◇</span>
+        <div class="verdict-text">
+          <b id="verdictTitle">等待扫描</b>
+          <span id="verdictSub">配置目标后点击「开始扫描」</span>
+        </div>
+      </div>
+
+      <div class="facts" id="facts"></div>
+      <div class="charcheck" id="charcheck"></div>
+      <div class="poc" id="pocBox"></div>
+      <div class="matrix" id="matrix"></div>
+      <div class="notes" id="notes"></div>
+      <div class="report-links" id="reportLinks"></div>
+
+      <div class="empty" id="emptyState">
+        <svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M24 5c5 7 2 10 4.6 14 1.8 2.8 5.4 3.6 5.4 9 0 7-4.8 12-10 12s-10-5-10-12c0-5 3.4-7 3.4-11 0-3.4-1.6-5.4-1.6-5.4" />
+        </svg>
+        <p>还没有数据</p>
+        <span>配置目标后点击「开始扫描」</span>
+      </div>
+    </section>
+  </main>
+
+  <div class="toasts" id="toasts"></div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>

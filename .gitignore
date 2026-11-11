@@ -1,0 +1,25 @@
+# ---- 密钥 / 本地环境 ----
+.env
+.env.*
+!.env.example
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+*.egg-info/
+
+# ---- 检测工具产物 ----
+xss-detector/out/
+
+# ---- DVWA 本地实例配置（上游同样不入库，用 .dist 复制） ----
+dvwa-lab/config/config.inc.php
+dvwa-lab/config/config.inc.php.bak
+
+# ---- 编辑器 / 系统 ----
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
